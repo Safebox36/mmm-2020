@@ -1,0 +1,1299 @@
+Begin _HB_AbanTravel
+
+;Script to make HB_aban patrol hunting grounds in the Grazelands
+
+short noLore
+
+short state
+short returnState
+short saveState
+float timer
+float timeout
+
+short initialize ; disables game
+short nixHound ; tracks progress of quest
+short encounter ; 1 if game is enabled
+short beastID
+short ambushPoint
+short successfulHunt
+;float combatTimeout
+float searchTime
+float huntTimer
+
+short stalled
+short escortPlayer ; dialog filter
+short sightHound ; dialog filter
+
+short purgeCaravan
+
+if ( purgeCaravan == 1 )
+	return
+endif
+
+if ( menumode == 1 ) ; if menu is open don't process
+	return
+endif
+
+;*************track player's progress in Diseased Nix Hound quest*************
+
+short startClock ; set startClock through dialog
+float storeHour
+short storeDay
+short storeMonth
+short storeYear
+
+if ( startClock == 1 )
+	set startClock to 2
+	set storeHour to GameHour
+	set storeDay to Day
+	set storeMonth to Month
+	set storeYear to Year
+elseif ( startClock == 2 )
+	if ( GameHour > storeHour )
+		if ( Day != storeDay )
+			set startClock to 3
+		endif
+	endif
+	if ( Day > ( storeDay + 1 ) )
+		set startClock to 3
+	elseif ( Month > storeMonth )
+		set startClock to 3
+	elseif ( Year > storeYear )
+		set startClock to 3
+	endif
+elseif ( startClock == 3 )
+	if ( GetJournalIndex, "HB_AshlanderHunter" >= 71 )
+		if ( GetJournalIndex, "HB_AshlanderHunter" <= 100 )
+			set startClock to 5
+		else
+			set startClock to 4
+		endif
+	else
+		set startClock to 4
+	endif
+elseif ( startClock == 4 )
+	if ( GetJournalIndex, "HB_AshlanderHunter" != 110 )
+		Journal, "HB_AshlanderHunter", 120 ; player failed
+	endif
+	"HB_aban"->RemoveItem, "HB_arrow_of_paralysis_00", 5
+	if ( player->GetItemCount, "HB_arrow_of_paralysis_00" > 0 )
+		player->RemoveItem, "HB_arrow_of_paralysis_00", 2
+		player->AddItem, "HB_arrow_of_paralysis_01", 2
+	endif
+	"HB_san"->Disable
+	set startClock to 5
+elseif ( startClock == 5 )
+	"HB_nix_hound_diseased"->Disable
+	"HB_kumasu"->PositionCell, 93873, 134251, 825, 90, "Ahemmusa Camp"
+	"HB_kumasu"->AIWander 512, 0, 0, 0, 20, 20, 20, 10, 10, 0, 0, 0
+	set escortPlayer to 0
+	set nixHound to 2
+	set state to saveState
+	set startClock to 6
+endif
+
+if ( OnDeath == 1 ) ; hold player accountable for Aban's death
+	if ( GetJournalIndex, "HB_AshlanderHunter" > 0 )
+		if ( GetJournalIndex, "HB_AshlanderHunter" < 70 )
+			set "HB_Deadline_Script_Holder".startClock to 1
+			"HB_Aban"->RemoveItem, "HB_arrow_of_paralysis_00", 5
+			"HB_Aban"->AddItem, "HB_arrow_of_paralysis_01", 1
+			if ( player->GetItemCount, "HB_arrow_of_paralysis_00" > 0 )
+				player->RemoveItem, "HB_arrow_of_paralysis_00", 2
+				player->AddItem, "HB_arrow_of_paralysis_01", 2
+			endif
+		endif
+	endif
+endif
+
+;************************disable hunt game until required*************************
+
+AddTopic, "Hunt at night"
+
+short houndDisabled ; dialog filter
+short doOnce
+
+if ( initialize == 0 ) ; set initial conditions
+	set initialize to 1 ; do once
+	"HB_nix_hound_diseased"->Disable
+	"HB_scrib"->Disable
+	"HB_kwama_forager"->Disable
+	"HB_rat"->Disable
+	"HB_nix_hound"->Disable
+	"HB_guar"->Disable
+	"HB_shalk"->Disable
+	"HB_kagouti"->Disable
+	"HB_alit"->Disable
+	"HB_cliff_racer"->Disable
+	set state to 380 ; starting point of travel
+endif
+
+;***********************nag player to begin search**************************
+
+if ( escortPlayer == 2 )
+	set timer to ( timer + GetSecondsPassed )
+	if ( timer < 5 )
+		return
+	else
+		if ( GetDistance Player <= 600 )
+			set timer to 0
+			ForceGreeting
+			return
+		endif
+	endif
+endif
+
+float pauseTimer
+float abanX
+short playerBehind ; dialog filter
+
+if ( GetCurrentAIPackage == 2 ) ; check to see if player is keeping up
+	if ( state < 1000 ) ; don't evaluate if Aban is at waypoint searching
+		set pauseTimer to ( pauseTimer + GetSecondsPassed )
+		if ( pauseTimer >= 5 )
+			set pauseTimer to 0
+			if ( "HB_aban"->GetPos, x == abanX ) ; hasn't moved for 5 seconds
+				set playerBehind to 1
+				ForceGreeting ; prompt player to follow
+			endif
+			set abanX to ( "HB_aban"->GetPos, x )
+		endif
+	endif
+endif
+
+if ( houndDisabled == 2 )
+	ForceGreeting
+endif
+		
+;*****************************Debug messages*****************************
+
+if ( HB_Debug == 1 ) ; global variable for debugging
+	short debugMessage
+	float debugtimer
+	set debugtimer to ( debugtimer + GetSecondsPassed )
+	if ( debugtimer >= 4 )
+		if ( debugMessage == 0 ) ; travel variables
+			MessageBox " Debug: state = %.0f  returnState = %.0f  timer = %.2f timeout = %.2f GameHour = %.2f , saveState = %.0f ", state, returnState, timer, timeout, GameHour, saveState
+			set debugMessage to 1
+		else ; hunting variables
+			MessageBox " Debug: nixHound = %.0f, successfulHunt = %.0f, encounter = %.0f, ambushPoint = %.0f, beastID = %.0f ", nixHound, successfulHunt, encounter, ambushPoint, beastID
+			set debugMessage to 0
+		endif
+		set debugtimer to 0
+	endif
+endif
+
+;********* Stalled Script rescue - recovers script after leaving a cell********
+
+If ( Player -> GetDistance, HB_aban < 5000 )
+	if ( GetCurrentAIPackage == -1 )
+		set timeout to ( timeout + GetSecondsPassed )
+;		if ( encounter == 2 )
+		if ( state == 1130 )
+			if ( timeout >= 15 )
+				set encounter to 1
+				set timeout to 0
+			endif
+		else
+			if ( timeout >= 3 )
+				set stalled to 1
+				set state to ( state - 10 )
+				set timeout to 0
+			endif
+		endif
+	else
+		set timeout to 0
+		set stalled to 0
+	endif
+endif
+if ( state <= -40 ) ; stall rescue failed
+	set state to 960
+	set encounter to 0
+	set successfulHunt to 0
+endif
+
+;****************************check for encounters****************************
+
+if ( state == 1100 )
+	if ( stalled == 1 )
+		set state to ( saveState + 10 )
+		return
+	endif
+	if ( GameHour > 6 )
+		if ( GameHour < 18 )
+			set successfulHunt to 0 ; continue hunting
+			set returnState to 0
+			set encounter to 0 ; stall protection
+			AIWander, 0, 0, 0, 0, 25, 50, 25, 0, 0, 0, 0, 0
+			set searchTime to ( Random, 4 )
+			set searchTime to ( searchTime + 3 )
+			set state to 1110
+			return
+		endif
+	endif
+	set successfulHunt to 1
+	set returnState to 1 ; stall protection
+	set state to ( saveState + 10 )
+endif
+
+if ( state == 1110 )
+	if ( stalled == 1 )
+		set state to ( saveState + 10 )
+		return
+	endif
+	set timer to ( timer + GetSecondsPassed )
+	if ( timer < searchTime ) ; this is to affect scaning the horizon for game
+		if ( timer >= 5 )
+			RotateWorld, z, 0
+		elseif ( timer >=3.6 )
+			RotateWorld, z, 40
+		elseif ( timer >=2.8 )
+			RotateWorld, z, 0
+		elseif ( timer >=2.4 )
+			RotateWorld, z, 60
+		elseif ( timer >=2.0 )
+			RotateWorld, z, 0
+		elseif ( timer >=1.4 )
+			RotateWorld, z, -60
+		elseif ( timer >=1.0 )
+			RotateWorld, z, 0
+ 		elseif ( timer >=0.7 )
+			RotateWorld, z, 40
+		endif
+ 		return
+	else
+		set timer to 0
+		if ( nixHound == 2 )
+			set state to 1120
+		else
+			set state to ( saveState + 10 )
+		endif
+	endif
+endif
+
+if ( state == 1120 )
+	if ( stalled == 1 )
+		set state to ( saveState + 10 )
+		return
+	endif
+	if ( ambushPoint == 0 )
+		set state to ( saveState + 10 )
+		return
+	endif
+	if ( encounter == 0 )
+		if ( GameHour >= 6 )
+			if ( GameHour < 18 )
+				if ( Random100 < 50 )
+ 					set encounter to 1
+					set state to 1130
+				else
+					set state to ( saveState + 10 )
+				endif
+			else
+				set state to ( saveState + 10 )
+			endif
+		else
+			set state to ( saveState + 10 )
+		endif
+	else
+		set state to ( saveState + 10 )
+	endif
+endif
+
+if ( state == 1130 )
+
+	if ( encounter == 1 )
+
+		if ( ambushPoint == 19 )
+			set beastID to 1
+			set saveState to 390
+			set "HB_scrib".ambushPoint to 19
+			set "HB_scrib".encounter to 1
+			"HB_scrib"->Enable
+
+		elseif ( ambushPoint == 16 )
+			set beastID to 2
+			set saveState to 330
+			set "HB_kwama_forager".ambushPoint to 16
+		elseif ( ambushPoint == 20 )
+			set beastID to 2
+			set saveState to 410
+			set "HB_kwama_forager".ambushPoint to 20
+		elseif ( ambushPoint == 37 )
+			set beastID to 2
+			set saveState to 850
+			set "HB_kwama_forager".ambushPoint to 37
+
+		elseif ( ambushPoint == 22 )
+			set beastID to 3
+			set saveState to 450
+			set "HB_rat".ambushPoint to 22
+		elseif ( ambushPoint == 27 )
+			set beastID to 3
+			set saveState to 590
+			set "HB_rat".ambushPoint to 27
+		elseif ( ambushPoint == 44 )
+			set beastID to 3
+			set saveState to 990
+			set "HB_rat".ambushPoint to 44
+
+		elseif ( ambushPoint == 14 )
+			set beastID to 4
+			set saveState to 290
+			set "HB_nix_hound".ambushPoint to 14
+		elseif ( ambushPoint == 24 )
+			set beastID to 4
+			set saveState to 490
+			set "HB_nix_hound".ambushPoint to 24
+		elseif ( ambushPoint == 34 )
+			set beastID to 4
+			set saveState to 810
+			set "HB_nix_hound".ambushPoint to 34
+
+		elseif ( ambushPoint == 13 )
+			set beastID to 5
+			set saveState to 270
+			set "HB_guar".ambushPoint to 13
+			set "HB_guar".encounter to 1
+			"HB_guar"->Enable
+
+		elseif ( ambushPoint == 30 )
+			set beastID to 6
+			set saveState to 730
+			set "HB_shalk".ambushPoint to 30
+		elseif ( ambushPoint == 40 )
+			set beastID to 6
+			set saveState to 930
+			set "HB_shalk".ambushPoint to 40
+
+		elseif ( ambushPoint == 10 )
+			set beastID to 7
+			set saveState to 210
+			set "HB_kagouti".ambushPoint to 10
+		elseif ( ambushPoint == 38 )
+			set beastID to 7
+			set saveState to 870
+			set "HB_kagouti".ambushPoint to 38
+
+		elseif ( ambushPoint == 42 )
+			set beastID to 8
+			set saveState to 970
+			set "HB_alit".ambushPoint to 42
+			set "HB_alit".encounter to 1
+			"HB_alit"->Enable
+
+		elseif ( ambushPoint == 36 )
+			set beastID to 9
+			set saveState to 830
+			set "HB_cliff_racer".ambushPoint to 36
+			set "HB_cliff_racer".encounter to 1
+			"HB_cliff_racer"->Enable
+
+		endif
+
+		if ( beastID == 2 )
+			set "HB_kwama_forager".encounter to 1
+			"HB_kwama_forager"->Enable
+		elseif ( beastID == 3 )
+			set "HB_rat".encounter to 1
+			"HB_rat"->Enable
+		elseif ( beastID == 4 )
+			set "HB_nix_hound".encounter to 1
+			"HB_nix_hound"->Enable
+		elseif ( beastID == 6 )
+			set "HB_shalk".encounter to 1
+			"HB_shalk"->Enable
+		elseif ( beastID == 7 )
+			set "HB_kagouti".encounter to 1
+			"HB_kagouti"->Enable
+		endif
+		set encounter to 2
+	endif
+
+	if ( encounter == 2 )
+		if ( successfulHunt == 0 )
+			return
+		elseif ( successfulHunt == 1 )
+			set beastID to 0
+			set encounter to 0
+			set state to ( saveState + 10 ) ; based on location of encounter
+			if ( GetHealth < 60 ) ; we don't want him to die out there
+				ModCurrentHealth, 120
+			endif
+			if ( GetItemCount, "steel arrow" < 10 ) ; just in case
+				AddItem, "steel arrow", 10
+			endif
+		endif
+	endif
+
+endif
+
+;**********************************start walking******************************************
+
+if ( state == 0 )
+	if ( GameHour >= 17 )
+		set state to -1  ; if its too late, stay in for the night
+	elseif ( GameHour < 6 )
+		set state to -1  ; if its too late, stay in for the night
+	elseif ( GameHour < 17 )		
+		if ( GameHour >= 6 )
+			if ( player -> GetDistance HB_aban < 6000 )
+				set returnState to 0 ; turn around
+				set state to 3
+			endif
+		endif
+	endif
+
+;***************************wait the night in Ahemmusa Camp******************************
+
+elseif ( state == -1)
+	SetHello 30
+	AIWander 300, 5, 0, 0, 20, 20, 10, 10, 20
+	set state to -2
+
+elseif ( state == -2)
+	if ( GameHour >= 17 )
+ 		if ( GameHour < 6 )
+			set state to -1
+		endif
+ 	endif
+	if ( GameHour < 17 )
+		if ( GameHour >= 6 )
+			set state to 3 ; if its morning, start the tour again
+		endif
+	endif
+
+;*************************loitering in Ahemmusa Camp**********************************
+
+elseif ( state == 3 )
+	if ( successfulHunt == 1 ) ; do once
+		set successfulHunt to 0 ; reset for next hunt
+		ModCurrentHealth, 100 ; heal between hunts
+		RemoveItem "chitin short bow", 1 ; 'repair' weapons
+		AddItem "chitin short bow", 1
+		RemoveItem "iron spear", 1
+		AddItem "iron spear", 1
+		RemoveItem "netch_leather_cuirass", 1 ; 'repair' armor
+		AddItem "netch_leather_cuirass", 1
+		RemoveItem "netch_leather_boots", 1
+		AddItem "netch_leather_boots", 1
+		while ( GetItemCount, "ingred_scrib_jelly_01" > 0 ) ; check inventory before removing
+ 			RemoveItem, "ingred_scrib_jelly_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_kwama_cuttle_01" > 0 )
+			RemoveItem, "ingred_kwama_cuttle_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_rat_meat_01" > 0 )
+			RemoveItem, "ingred_rat_meat_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_hound_meat_01" > 0 )
+			RemoveItem, "ingred_hound_meat_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_guar_hide_01" > 0 )
+			RemoveItem, "ingred_guar_hide_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_shalk_resin_01" > 0 )
+			RemoveItem, "ingred_shalk_resin_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_kagouti_hide_01" > 0 )
+			RemoveItem, "ingred_kagouti_hide_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_alit_hide_01" > 0 )
+			RemoveItem, "ingred_alit_hide_01", 1
+		endwhile
+		while ( GetItemCount, "ingred_racer_plumes_01" > 0 )
+			RemoveItem, "ingred_racer_plumes_01", 1
+		endwhile
+		while ( GetItemCount, "chitin arrow" < 20 ) ; replenish arrows
+			AddItem, "chitin arrow", 1
+		endwhile
+	endif
+	SetHello 40
+	AIWander 256, 0, 0, 0, 10, 10, 20, 10, 10, 0, 0, 0
+	set state to 10
+
+elseif ( state == 10 )
+	set timer to ( timer + GetSecondsPassed )
+	if ( timer < 60 )
+		return
+	endif
+	set timer to 0 ; reset for next round
+	set state to 20
+
+;*******************************He begins his trip**********************************
+
+elseif ( state == 20 )
+	SetHello 20
+	AITravel 94012, 134715, 880 ; point 1, inside Ahemmusa Camp
+	set state to ( state + 10 )
+
+elseif ( state == 30 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 1
+		if ( returnState == 1 )
+			set state to 0 ; time check
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 40 )
+	AITravel 93467, 135021, 845 ; point 2, outside Ahemmusa Camp
+	set state to ( state + 10 )
+
+elseif ( state == 50 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 2
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 60 )
+	AITravel 91601, 134059, 818 ; point 3, shalk country
+	set state to ( state + 10 )
+
+elseif ( state == 70 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 3
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 80 )
+	AITravel 90351, 132528, 782 ; point 4, start of path
+	set state to ( state + 10 )
+
+elseif ( state == 90 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 4
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 100 )
+	AITravel 89312, 132709, 829 ; point 5
+	set state to ( state + 10 )
+
+elseif ( state == 110 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 5
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 120 )
+	AITravel 88022, 132565, 738 ; point 6, path to eggmine
+	set state to ( state + 10 )
+
+elseif ( state == 130 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 6
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 140 )
+	AITravel 87631, 131149, 709 ; point 7
+	set state to ( state + 10 )
+
+elseif ( state == 150 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 7
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 160 )
+	AITravel 86040, 129813, 834 ; point 8
+	set state to ( state + 10 )
+
+elseif ( state == 170 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 8
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 180 )
+	AITravel 83518, 126770, 873 ; point 9 ; robbed trader
+	set state to ( state + 10 )
+
+elseif ( state == 190 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 9
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set state to ( state + 10 )
+		endif
+	endif
+
+elseif ( state == 200 )
+	AITravel 81537, 125120, 1053 ; point 10
+	set state to ( state + 10 )
+
+elseif ( state == 210 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 10
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 10
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 220 )
+	AITravel 81986, 124003, 1439 ; point 11, rise (start loop)
+	set state to ( state + 10 )
+
+elseif ( state == 230 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 11
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 0
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 240 )
+	AITravel 80624, 123708, 1617 ; point 12, ridge
+	set state to ( state + 10 )
+
+elseif ( state == 250 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 12
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 0
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 260 )
+	AITravel 79296, 121721, 1890 ; point 13, steep climb
+	set state to ( state + 10 )
+
+elseif ( state == 270 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 13
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 13
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 280 )
+	AITravel 77215, 120959, 1126 ; point 14, opening
+	set state to ( state + 10 )
+
+elseif ( state == 290 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 14
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 14
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 300 )
+	AITravel 76089, 120220, 1067 ; point 15, opening
+	set state to ( state + 10 )
+
+elseif ( state == 310 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 15
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 0
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 320 )
+	AITravel 74140, 119119, 1626 ; point 16, ridge
+	set state to ( state + 10 )
+
+elseif ( state == 330 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 16
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 16
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 340 )
+	AITravel 73511, 117166, 1492 ; point 17, behind tomb
+	set state to ( state + 10 )
+
+elseif ( state == 350 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 17
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 0
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 360 )
+	AITravel 74212, 116154, 1494 ; point 18
+	set state to ( state + 10 )
+
+elseif ( state == 370 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 18
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set state to 1100
+			set ambushPoint to 0
+		endif
+	endif
+
+elseif ( state == 380 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 75470, 115364, 1187, 0 ; point 19
+	else
+		AITravel 75470, 115364, 1187 ; point 19, starting point
+	endif
+	set state to ( state + 10 )
+
+elseif ( state == 390 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 19
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 19
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 400 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 76648, 116326, 1075, 0 ; point 20
+	else
+		AITravel 76648, 116326, 1075 ; point 20, bank of path
+	endif
+	set state to ( state + 10 )
+
+elseif ( state == 410 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 20
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 20
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 420 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 77160, 114991, 731, 0 ; point 21
+	else
+		AITravel 77160, 114991, 731 ; point 21, intersection of paths
+	endif
+	set state to ( state + 10 )
+
+elseif ( state == 430 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 21
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 0
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 440 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 78201, 114265, 850, 0 ; point 22
+	else
+		AITravel 78201, 114265, 850 ; point 22
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 450 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 22
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 22
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 460 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 80272, 113700, 790, 0 ; point 23
+	else
+		AITravel 80272, 113700, 790 ; point 23
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 470 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 23
+		if ( returnState == 1 )
+			set state to ( state - 30 )
+		elseif ( returnState == 0 )
+			set saveState to state
+			set ambushPoint to 0
+			set state to 1100
+		endif
+	endif
+
+elseif ( state == 480 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 80231, 112714, 1147, 0 ; point 24
+	else
+		AITravel 80231, 112714, 1147 ; point 24
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 490 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 24
+		set saveState to state
+		set ambushPoint to 24
+		set state to 1100
+	endif
+
+elseif ( state == 500 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 79814, 111374, 1131, 0 ; point 25
+	else
+		AITravel 79814, 111374, 1131 ; point 25
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 510 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 25
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 520 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 79071, 110775, 1178, 0 ; point 26
+	else
+		AITravel 79071, 110775, 1178 ; point 26
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 530 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 26
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 540 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 76532, 110334, 1110, 0 ; point 27
+	else
+		AITravel 76532, 110334, 1110 ; point 27
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 550 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 27
+		if ( nixHound == 0 ) ; hasn't initiated quest
+			set saveState to state ; small loop
+		else
+			set saveState to ( state + 40 ) ; large loop
+			set ambushPoint to 27
+		endif
+		set state to 1100
+	endif
+
+elseif ( state == 560 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 76713, 112079, 1249, 0 ; point 28
+	else
+		AITravel 76713, 112079, 1249 ; point 28
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 570 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 28
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 580 )
+	if ( escortPlayer == 1 )
+		AIEscort Player 0, 76517, 113250, 1275, 0 ; point 29
+	else
+		AITravel 76517, 113250, 1275 ; point 29
+	endif
+	set state to ( state + 10 )
+	
+elseif ( state == 590 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 29
+		set saveState to 370 ; starting point
+		set ambushPoint to 0
+ 		set state to 1100
+	endif
+
+;*****after quest initiated
+
+elseif ( state == 600 )
+	if ( nixHound == 1 )
+		SetHello, 0
+		AIEscort Player 0, 74717, 110775, 1217, 0 ; point 30
+	else
+		AItravel 74717, 110775, 1217, 0 ; point 30
+	endif
+	set state to ( state + 10 )
+
+elseif ( state == 610 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 30
+		if ( nixHound == 1 ) ; quest active
+			set saveState to state ; side loop
+		else ; quest completed
+			set saveState to ( state + 120 ) ; standard loop
+			set ambushPoint to 30
+		endif
+		set state to 1100
+	endif
+
+elseif ( state == 620 )
+	AIEscort Player 0, 72674, 110184, 922, 0 ; point 31b
+	set state to ( state + 10 )
+
+elseif ( state == 630 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 31b
+		"HB_nix_hound_diseased"->Enable 
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 640 )
+	AIEscort Player 0, 70863, 109765, 1225, 0 ; point 32b (sees hound)
+	set state to ( state + 10 )
+
+elseif ( state == 650 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 32b
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 660 )
+	"HB_aban"->SetMarksman, 200 ; just to be certain he hits
+	set sightHound to 1
+	ForceGreeting ; Escort, no distance check needed
+	"HB_aban"->ForceSneak
+	AIEscort Player 0, 70387, 110783, 866, 0 ; 32b+ (stalks hound)
+	set state to ( state + 10 )
+
+elseif ( state == 670 )
+	if ( GetAIPackageDone == 1 )
+		"HB_aban"->ClearForceSneak
+ 		"HB_aban"->StartCombat, "HB_nix_hound_diseased"
+		set state to ( state + 10 )
+	endif
+
+elseif ( state == 680 )
+	if ( "HB_nix_hound_diseased"->GetHealth <= 0 )
+		if ( GetDistance player <= 800 )
+			ForceGreeting
+		endif
+		AITravel 69224, 113030, 882
+		set state to ( state + 10 )
+	elseif ( "HB_nix_hound_diseased"->GetFatigue < 0 )
+		set houndDisabled to 1
+		"HB_aban"->StopCombat, "HB-nix_hound_diseased"
+		AITravel 69224, 113030, 882
+		set state to ( state + 10 )
+	endif
+
+elseif ( state == 690 )
+	set saveState to state
+	"HB_aban"->RemoveItem, "HB_arrow_of_paralysis_00", 5 ; done earlier, but just in case
+	if ( player->GetItemCount, "HB_arrow_of_paralysis_00" > 0 )
+		player->RemoveItem, "HB_arrow_of_paralysis_00", 2 ; the good ones
+		player->AddItem, "HB_arrow_of_paralysis_01", 2
+	endif
+	"HB_aban"->SetMarksman, 74
+	if ( GetDistance, "HB_nix_hound_diseased" < 300 )
+		if ( doOnce == 0 )
+			set doOnce to 1
+			AIWander, 32, 0, 0, 0, 20, 20, 10, 10, 0, 0, 10, 10
+		endif
+		if ( GetJournalIndex, "HB_AshlanderHunter" != 45 )
+			if ( "HB_nix_hound_diseased"->GetFatigue < 1 )
+				if ( GetDistance Player > 400 )
+					return
+				else
+					ForceGreeting
+				endif
+			endif
+		endif
+		set state to ( state + 10 )
+	elseif ( GetPos, y >= 113000 )
+		set state to ( state + 10 )
+	elseif ( GetJournalIndex, "HB_AshlanderHunter" >= 71 )
+		set state to ( state + 10 )
+	endif
+
+elseif ( state == 700 ) ; handle some of this through dialog
+	if ( GetJournalIndex "HB_AshlanderHunter" == 100 )
+ 		"HB_aban"->SetMarksman, 0
+		"HB_nix_hound_diseased"->Resurrect
+		"HB_nix_hound_diseased"->SetHealth, 20
+		"HB_nix_hound_diseased"->SetParalysis, 100
+		"HB_aban"->StartCombat, "HB_nix_hound_diseased"
+		set state to ( state + 10 )
+	elseif ( GetJournalIndex "HB_AshlanderHunter" == 45 )
+		set state to ( state + 10 )
+	elseif ( "HB_nix_hound_diseased"->GetDisabled == 1 )
+		set state to ( state + 10 )
+	endif
+
+elseif ( state == 710 )
+	if ( "HB_nix_hound_diseased"->GetHealth > 0 )
+		return
+	else
+ 		"HB_aban"->SetMarksman, 74
+		if ( GetJournalIndex "HB_AshlanderHunter" == 100 ) ; destroy nix hound
+			set timer to ( timer + GetSecondsPassed )
+			if ( timer < 1.5 )
+				return
+			endif
+			"HB_nix_hound_diseased"->Position, 69679, 112514, 858, 9000
+			PlaySound3DVP, "destruction hit", 1.0, 1.0
+			"Light_HB_Funeral_Pire"->Position, 69679, 112514, 814, 0
+			set state to 712
+		else
+			set state to ( state + 10 )
+		endif
+	endif
+
+
+elseif ( state == 712 )
+	if ( GetSoundPlaying, "destruction hit" == 1 )
+		return
+	else
+		PlaySound3DVP, "Fire", 1.0, 1.0
+		set state to 714
+	endif
+
+elseif ( state == 714 )
+	set timer to ( timer + GetSecondsPassed )
+	"Light_HB_Funeral_Pire"->MoveWorld z, -0.3
+	if ( timer < 10 )
+		return
+	elseif ( timer < 18 )
+		if ( "HB_nix_hound_diseased"->GetDisabled == 0 )
+			"HB_nix_hound_diseased"->Disable
+		endif
+	else
+		set timer to 0
+		StopSound "Fire"
+		"Light_HB_Funeral_Pire"->Position, 69679, 112514, 0, 0
+		set state to 720
+	endif
+
+
+elseif ( state == 720 )
+	AITravel 70481, 111853, 889 ; point 33, meadow
+	set nixHound to 2
+	set state to ( state + 10 )
+	
+elseif ( state == 730 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 33
+		set saveState to ( state + 40 ) ; jump over standard loop
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+
+elseif ( state == 740 )
+	AITravel 73531, 112404, 1228 ; point 31
+	set state to ( state + 10 )
+	
+elseif ( state == 750 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 31
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 760 )
+	AITravel 73531, 112404, 1228 ; point 32
+	set state to ( state + 10 )
+	
+elseif ( state == 770 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 32
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+
+elseif ( state == 780 )
+	AITravel 70790, 113618, 1152 ; point 34, tree
+	set state to ( state + 10 )
+	
+elseif ( state == 790 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 34
+		set saveState to state
+		set ambushPoint to 34
+		set state to 1100
+	endif
+
+elseif ( state == 800 )
+	AITravel 68931, 114517, 1503 ; point 35, ridge
+	set state to ( state + 10 )
+	
+elseif ( state == 810 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 35
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 820 )
+	AITravel 68851, 116380, 1616 ; point 36
+	set state to ( state + 10 )
+	
+elseif ( state == 830 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 36
+		set saveState to state
+		set ambushPoint to 36
+		set state to 1100
+	endif
+
+elseif ( state == 840 )
+	AITravel 69431, 117871, 1520 ; point 37, across from tomb
+	set state to ( state + 10 )
+	
+elseif ( state == 850 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 37
+		set saveState to state
+		set ambushPoint to 37
+		set state to 1100
+	endif
+
+elseif ( state == 860 )
+	AITravel 70311, 119392, 1532 ; point 38
+	set state to ( state + 10 )
+	
+elseif ( state == 870 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 38
+		set saveState to state
+		set ambushPoint to 38
+		set state to 1100
+	endif
+
+elseif ( state == 880 )
+	AITravel 71280, 120750, 1284 ; point 39
+	set state to ( state + 10 )
+	
+elseif ( state == 890 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 39
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 900 )
+	AITravel 73126, 122390, 1183 ; point 40, boulder
+	set state to ( state + 10 )
+	
+elseif ( state == 910 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 40
+		set saveState to state
+		set ambushPoint to 40
+		set state to 1100
+	endif
+
+elseif ( state == 920 )
+	AITravel 74807, 122673, 1191 ; point 41
+	set state to ( state + 10 )
+	
+elseif ( state == 930 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 41
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 940 )
+	AITravel 76480, 124324, 1519 ; point 42, ridge
+	set state to ( state + 10 )
+	
+elseif ( state == 950 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 42
+		set saveState to state
+		set ambushPoint to 42
+		set state to 1100
+	endif
+
+elseif ( state == 960 )
+	AITravel 75824, 126271, 1813 ; point 43, hill top
+	set state to ( state + 10 )
+	
+elseif ( state == 970 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 43
+		set saveState to state
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+elseif ( state == 980 )
+	AITravel 77640, 126685, 1595 ; point 44, ridge
+	set state to ( state + 10 )
+	
+elseif ( state == 990 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 44
+		set saveState to state
+		set ambushPoint to 44
+		set state to 1100
+	endif
+
+elseif ( state == 1000 )
+	AITravel 79470, 125586, 858 ; point 45, Hand Rock
+	set state to ( state + 10 )
+
+elseif ( state == 1010 )
+	if ( GetAIPackageDone == 1 ) ; he's at point 45
+		set saveState to 190 ; jump to point 10
+		set ambushPoint to 0
+		set state to 1100
+	endif
+
+endif ; this is end of travel elseifs 
+
+End _HB_AbanTravel

@@ -1,0 +1,14 @@
+{
+    "guards": {
+        "aa_testcultist02": {
+            "resetTime": 5,
+            "cur": 1,
+            "dir": 1,
+            "path": [
+                "aa_testpatrolmarker1",
+                "aa_testpatrolmarker2",
+                "aa_testpatrolmarker3"
+            ]
+        }
+    }
+}
