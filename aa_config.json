@@ -4,6 +4,31 @@
             "resetTime": 5,
             "cur": 1,
             "dir": 1,
+            "isDone": false,
+            "path": [
+                "aa_testpatrolmarker1",
+                "aa_testpatrolmarker2",
+                "aa_testpatrolmarker3"
+            ]
+        },
+        "aa_testcultist03": {
+            "resetTime": 2,
+            "cur": 1,
+            "dir": 0,
+            "isDone": false,
+            "path": [
+                "aa_testpatrolmarker1",
+                "aa_testpatrolmarker2",
+                "aa_testpatrolmarker3"
+            ]
+        }
+    },
+    "allies": {
+        "aa_testcultist01": {
+            "resetTime": 5,
+            "cur": 1,
+            "dir": 0,
+            "isDone": false,
             "path": [
                 "aa_testpatrolmarker1",
                 "aa_testpatrolmarker2",
