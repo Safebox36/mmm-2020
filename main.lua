@@ -11,6 +11,15 @@ local function sqrDist(g, p)
     return dist
 end
 
+local function checkVision(gK)
+    local g = tes3.getReference(gK)
+    local gR = g.orientation.y - (90 / 180 * 3.14)
+    local gP = {g.position.x + math.cos(gR), g.position.z + math.sin(gR)}
+    local pP = tes3.player.position
+    local delta = (pP.x - gP[1]) / (pP.z - gP[2])
+    return math.abs(math.atan(delta) / 3.14 * 180) <= 60
+end
+
 local function getNextPos(gK, gV)
     local next
     if (gV.dir == 0) then
@@ -38,7 +47,9 @@ end
 
 local function updateGuards()
     for gK, gV in pairs(config.guards) do
-        -- if (g.mobile.aiPlanner:getActivePackage() == nil or g.mobile.aiPlanner:getActivePackage().isDone) then
+        if (checkVision(gK) and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
+            print(gK .. " - true (" .. mwscript.getDistance{reference = gK, target = tes3.player} .. ")")
+        end
         if (sqrDist(gK, gV.path[gV.cur]) < 128 and gV.isDone == true) then
             gV.isDone = false
             timer.start{ duration = gV.resetTime, iterations = 1, type = timer.simulate, callback = function() getNextPos(gK, gV) end }
