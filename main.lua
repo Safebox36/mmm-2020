@@ -13,11 +13,12 @@ end
 
 local function checkVision(gK)
     local g = tes3.getReference(gK)
-    local gR = g.orientation.y - (90 / 180 * 3.14)
-    local gP = {g.position.x + math.cos(gR), g.position.z + math.sin(gR)}
+    local gR = g.orientation.z
+    local gP = g.position
     local pP = tes3.player.position
-    local delta = (pP.x - gP[1]) / (pP.z - gP[2])
-    return math.abs(math.atan(delta) / 3.14 * 180) <= 60
+    local delta = (pP.x - gP.x) / (pP.z - gP.z)
+    -- print(gR .. " - " .. math.atan(delta) .. " - " .. math.abs(gR - math.atan(delta)) .. " - " .. math.abs(gR - math.atan(delta)) / 3.14 * 180)
+    return math.abs(gR - math.atan(delta)) / 3.14 * 180 <= 60
 end
 
 local function getNextPos(gK, gV)
@@ -47,7 +48,7 @@ end
 
 local function updateGuards()
     for gK, gV in pairs(config.guards) do
-        if (checkVision(gK) and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
+        if (checkVision(gK) and lineofsight and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
             print(gK .. " - true (" .. mwscript.getDistance{reference = gK, target = tes3.player} .. ")")
         end
         if (sqrDist(gK, gV.path[gV.cur]) < 128 and gV.isDone == true) then
