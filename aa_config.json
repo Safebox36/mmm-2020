@@ -1,39 +1,45 @@
 {
-    "guards": {
-        "aa_testcultist02": {
-            "resetTime": 5,
-            "cur": 1,
-            "dir": 1,
-            "isDone": false,
-            "path": [
-                "aa_testpatrolmarker1",
-                "aa_testpatrolmarker2",
-                "aa_testpatrolmarker3"
-            ]
+    "AA_simpy's playroom": {
+        "alarm": "aa_testbell",
+        "alarmTriggered": false,
+        "guards": {
+            "aa_testcultist02": {
+                "isAlarmed": false,
+                "resetTime": 5,
+                "cur": 1,
+                "dir": 1,
+                "isDone": false,
+                "path": [
+                    "aa_testpatrolmarker1",
+                    "aa_testpatrolmarker2",
+                    "aa_testpatrolmarker3"
+                ]
+            },
+            "aa_testcultist03": {
+                "isAlarmed": false,
+                "resetTime": 2,
+                "cur": 1,
+                "dir": 0,
+                "isDone": false,
+                "path": [
+                    "aa_testpatrolmarker1",
+                    "aa_testpatrolmarker2",
+                    "aa_testpatrolmarker3"
+                ]
+            }
         },
-        "aa_testcultist03": {
-            "resetTime": 2,
-            "cur": 1,
-            "dir": 0,
-            "isDone": false,
-            "path": [
-                "aa_testpatrolmarker1",
-                "aa_testpatrolmarker2",
-                "aa_testpatrolmarker3"
-            ]
-        }
-    },
-    "allies": {
-        "aa_testcultist01": {
-            "resetTime": 5,
-            "cur": 1,
-            "dir": 0,
-            "isDone": false,
-            "path": [
-                "aa_testpatrolmarker1",
-                "aa_testpatrolmarker2",
-                "aa_testpatrolmarker3"
-            ]
+        "allies": {
+            "aa_testcultist01": {
+                "resetTime": 5,
+                "cur": 1,
+                "dir": 0,
+                "isDone": false,
+                "path": [
+                    "aa_testpatrolmarker1",
+                    "aa_testpatrolmarker2",
+                    "aa_testpatrolmarker3"
+                ]
+            }
         }
     }
 }

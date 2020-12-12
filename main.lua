@@ -11,6 +11,20 @@ local function sqrDist(g, p)
     return dist
 end
 
+local function getCloserGuard(gK)
+    local closestGuard = {k = "", v = 65535}
+    for cK, cV in pairs(config[tes3.getPlayerCell().id].guards) do
+        if (cK ~= gK) then
+            if (sqrDist(cK, gK) < closestGuard.v) then
+                closestGuard.k = cK
+                closestGuard.v = sqrDist(cK, gK)
+            end
+        end
+    end
+    local c = tes3.getReference(closestGuard.k)
+    c.mobile:startCombat(tes3.player.mobile)
+end
+
 local function checkVision(gK)
     local g = tes3.getReference(gK)
     local gR = g.orientation.z
@@ -41,19 +55,27 @@ local function getNextPos(gK, gV)
 end
 
 local function initGuards()
-    for gK, gV in pairs(config.guards) do
+    for gK, gV in pairs(config[tes3.getPlayerCell().id].guards) do
         timer.start{ duration = gV.resetTime, iterations = 1, type = timer.simulate, callback = function() getNextPos(gK, gV) end }
     end
 end
 
 local function updateGuards()
-    for gK, gV in pairs(config.guards) do
-        if (checkVision(gK) and lineofsight and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
-            print(gK .. " - true (" .. mwscript.getDistance{reference = gK, target = tes3.player} .. ")")
-        end
-        if (sqrDist(gK, gV.path[gV.cur]) < 128 and gV.isDone == true) then
-            gV.isDone = false
-            timer.start{ duration = gV.resetTime, iterations = 1, type = timer.simulate, callback = function() getNextPos(gK, gV) end }
+    for gK, gV in pairs(config[tes3.getPlayerCell().id].guards) do
+        if (config[tes3.getPlayerCell().id].alarmTriggered and tes3.getReference(gK).mobile.inCombat == false) then
+            config[tes3.getPlayerCell().id].guards[gK].isAlarmed = true
+            tes3.getReference(gK).mobile:startCombat(tes3.player.mobile)
+        elseif (config[tes3.getPlayerCell().id].guards[gK].isAlarmed == false) then
+            if (checkVision(gK) and tes3.testLineOfSight{reference1 = gK, reference2 = tes3.player} and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
+                -- tes3.setGlobal("Random100", 80)
+                -- tes3.playVoiceover{actor = gK, voiceover = tes3.voiceover.flee}
+                -- print(gK .. " - true (" .. mwscript.getDistance{reference = gK, target = tes3.player} .. ")")
+                getCloserGuard(gK)
+            end
+            if (sqrDist(gK, gV.path[gV.cur]) < 128 and gV.isDone == true) then
+                gV.isDone = false
+                timer.start{ duration = gV.resetTime, iterations = 1, type = timer.simulate, callback = function() getNextPos(gK, gV) end }
+            end
         end
     end
 end
