@@ -68,31 +68,33 @@ local function initGuards()
 end
 
 local function updateGuards()
-    for gK, gV in pairs(config[tes3.getPlayerCell().id].guards) do
-        -- trigger combat
-        if (config[tes3.getPlayerCell().id].alarmTriggered and tes3.getReference(gK).mobile.inCombat == false) then
-            tes3.getReference(gK).mobile:startCombat(tes3.player.mobile)
-        -- run to trigger alarm
-        elseif (config[tes3.getPlayerCell().id].guards[gK].isAlarmed) then
-            if (sqrDist(gK, config[tes3.getPlayerCell().id].alarm) <= 128) then
-                config[tes3.getPlayerCell().id].alarmTriggered = true
-            end
-        -- normal patrol
-        else
-            if (checkVision(gK) and tes3.testLineOfSight{reference1 = gK, reference2 = tes3.player} and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
-                -- tes3.setGlobal("Random100", 80)
-                -- tes3.playVoiceover{actor = gK, voiceover = tes3.voiceover.flee}
-                -- print(gK .. " - true (" .. mwscript.getDistance{reference = gK, target = tes3.player} .. ")")
-                local a = tes3.getReference(config[tes3.getPlayerCell().id].alarm)
-                local g = tes3.getReference(gK)
-                g.mobile.isRunning = true
-                tes3.setAITravel{reference = gK, destination = a.position}
-                config[tes3.getPlayerCell().id].guards[gK].isAlarmed = true
-                getCloserGuard(gK)
-            end
-            if (sqrDist(gK, gV.path[gV.cur]) < 128 and gV.isDone == true) then
-                gV.isDone = false
-                timer.start{ duration = gV.resetTime, iterations = 1, type = timer.simulate, callback = function() getNextPos(gK, gV) end }
+    if (tes3.getGlobal("aa_begin")) then
+        for gK, gV in pairs(config[tes3.getPlayerCell().id].guards) do
+            -- trigger combat
+            if (config[tes3.getPlayerCell().id].alarmTriggered and tes3.getReference(gK).mobile.inCombat == false) then
+                tes3.getReference(gK).mobile:startCombat(tes3.player.mobile)
+            -- run to trigger alarm
+            elseif (config[tes3.getPlayerCell().id].guards[gK].isAlarmed) then
+                if (sqrDist(gK, config[tes3.getPlayerCell().id].alarm) <= 128) then
+                    config[tes3.getPlayerCell().id].alarmTriggered = true
+                end
+            -- normal patrol
+            else
+                if (checkVision(gK) and tes3.testLineOfSight{reference1 = gK, reference2 = tes3.player} and mwscript.getDistance{reference = gK, target = tes3.player} <= 128 * 3) then
+                    -- tes3.setGlobal("Random100", 80)
+                    -- tes3.playVoiceover{actor = gK, voiceover = tes3.voiceover.flee}
+                    -- print(gK .. " - true (" .. mwscript.getDistance{reference = gK, target = tes3.player} .. ")")
+                    local a = tes3.getReference(config[tes3.getPlayerCell().id].alarm)
+                    local g = tes3.getReference(gK)
+                    g.mobile.forceRun = true
+                    tes3.setAITravel{reference = gK, destination = a.position}
+                    config[tes3.getPlayerCell().id].guards[gK].isAlarmed = true
+                    getCloserGuard(gK)
+                end
+                if (sqrDist(gK, gV.path[gV.cur]) < 128 and gV.isDone == true) then
+                    gV.isDone = false
+                    timer.start{ duration = gV.resetTime, iterations = 1, type = timer.simulate, callback = function() getNextPos(gK, gV) end }
+                end
             end
         end
     end
@@ -104,11 +106,11 @@ end
 
 local function init()
     print("===========")
-    print("AA BEGIN...")
+    print("AA AI BEGIN...")
     event.register('cellChanged', initGuards)
     event.register('simulate', updateGuards)
     event.register('save', saveAndQuit)
-    print("AA SUCCESS")
+    print("AA AI SUCCESS")
     print("==========")
 end
 
